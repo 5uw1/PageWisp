@@ -1,5 +1,10 @@
 # PageWisp
 
+[![Build](https://github.com/5uw1/PageWisp/actions/workflows/build.yml/badge.svg)](https://github.com/5uw1/PageWisp/actions/workflows/build.yml)
+[![Quality Gate Status](https://sonarcloud.io/api/project_badges/measure?project=5uw1_PageWisp&metric=alert_status)](https://sonarcloud.io/summary/new_code?id=5uw1_PageWisp)
+[![Coverage](https://sonarcloud.io/api/project_badges/measure?project=5uw1_PageWisp&metric=coverage)](https://sonarcloud.io/summary/new_code?id=5uw1_PageWisp)
+[![License: AGPL-3.0](https://img.shields.io/badge/license-AGPL--3.0-blue.svg)](LICENSE)
+
 A fast, lightweight PDF reader for the desktop. Keyboard-friendly, with a clean icon-only interface and light/dark themes.
 
 ![PageWisp showing a document with search results highlighted](docs/screenshot.png)
@@ -112,7 +117,7 @@ includes an SBOM (`PageWisp-<version>-sbom.cdx.json`) listing the exact dependen
 
 ## License
 
-Copyright (C) 2026 suwijakza
+Copyright (C) 2026 5uw1
 
 PageWisp is free software: you can redistribute it and/or modify it under the terms of the
 [GNU Affero General Public License v3.0](LICENSE) or (at your option) any later version.

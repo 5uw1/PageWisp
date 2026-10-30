@@ -20,8 +20,9 @@ jobs:
     outputs:
       app_version: ${{ steps.v.outputs.app_version }}
       prerelease: ${{ steps.v.outputs.prerelease }}
+      base_version: ${{ steps.v.outputs.base_version }}
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4.3.1
       - id: v
         shell: bash
         run: |
@@ -32,13 +33,14 @@ jobs:
             VERSION="${BASE}-dev.${GITHUB_RUN_NUMBER}"         # every non-tag build uniquely numbered
           fi
           echo "app_version=$VERSION" >> "$GITHUB_OUTPUT"
+          echo "base_version=${VERSION%%-dev.*}" >> "$GITHUB_OUTPUT"
           if [[ "$VERSION" == *-* ]]; then echo "prerelease=true" >> "$GITHUB_OUTPUT"; else echo "prerelease=false" >> "$GITHUB_OUTPUT"; fi
 
   # ---------------------------------------------------------------- code quality + security
   quality:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4.3.1
       - uses: astral-sh/setup-uv@v6
       - name: Lint (Ruff, rules in pyproject.toml)
         run: uvx ruff check app main.py tests
@@ -50,16 +52,38 @@ jobs:
           uvx pip-audit -r requirements-all.txt --disable-pip --no-deps
 
   # ---------------------------------------------------------------- tests
+  # Runs on Windows (the platform PageWisp ships for). The SonarQube Cloud scan runs here too, so it
+  # can read the coverage report from the same checkout path.
   test:
+    needs: version
     runs-on: windows-latest
+    env:
+      SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}   # empty on fork PRs: the scan step is then skipped
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4.3.1
+        with:
+          fetch-depth: 0   # full history, for accurate SonarQube blame and new-code detection
       - uses: astral-sh/setup-uv@v6
       - run: uv sync --locked
-      - name: Run tests (headless Qt)
-        run: uv run pytest -v
+      - name: Run tests with coverage (headless Qt)
+        run: uv run pytest -v --cov=app --cov-report=xml
         env:
           QT_QPA_PLATFORM: offscreen
+      - name: Cache SonarQube packages
+        if: env.SONAR_TOKEN != ''
+        uses: actions/cache@0057852bfaa89a56745cba8c7296529d2fc39830 # v4.3.0
+        with:
+          path: ~/.sonar/cache
+          key: ${{ runner.os }}-sonar
+          restore-keys: ${{ runner.os }}-sonar
+      # Project keys and coverage settings are in sonar-project.properties. projectVersion drops the
+      # -dev.N suffix so SonarQube's "new code since previous version" isn't reset on every main build.
+      - name: SonarQube Cloud scan
+        if: env.SONAR_TOKEN != ''
+        uses: SonarSource/sonarqube-scan-action@4d1dc0c91ee400dcf8a6dddf2f705ac36542e304 # v8.4.0
+        with:
+          args: >
+            -Dsonar.projectVersion=${{ needs.version.outputs.base_version }}
 
   # ---------------------------------------------------------------- windows
   windows:
@@ -68,7 +92,7 @@ jobs:
     env:
       APP_VERSION: ${{ needs.version.outputs.app_version }}
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4.3.1
       - uses: astral-sh/setup-uv@v6
       - run: uv sync --locked
       - name: Stamp version

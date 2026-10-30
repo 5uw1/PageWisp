@@ -12,3 +12,8 @@ dist/
 .idea/
 .vscode/
 .claude/settings.local.json
+
+# Coverage / SonarQube scanner
+.coverage
+coverage.xml
+.scannerwork/
