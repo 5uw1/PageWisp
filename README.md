@@ -34,15 +34,23 @@ A fast, lightweight PDF reader for the desktop. Keyboard-friendly, with a clean 
 | Invert colors / theme / full screen | `Ctrl+I` / `Ctrl+D` / `F11` |
 | All shortcuts | `F1` |
 
-## Getting started
+## Download
+
+Get `PageWisp-<version>-windows.zip` from the [latest release](https://github.com/5uw1/PageWisp/releases/latest),
+unzip it anywhere, and run `PageWisp.exe`. Nothing needs installing.
+
+The executable isn't code-signed yet, so Windows SmartScreen may say *"Windows protected your PC"*
+the first time. Click **More info → Run anyway**.
+
+## Running from source
 
 PageWisp is developed and tested on Windows. It's built on Qt and may run on macOS and Linux, but those platforms are untested.
 
 You need [uv](https://docs.astral.sh/uv/). It installs the right Python version and all dependencies for you.
 
 ```bash
-git clone https://github.com/<your-username>/pagewisp.git
-cd pagewisp
+git clone https://github.com/5uw1/PageWisp.git
+cd PageWisp
 uv sync
 uv run main.py
 ```
@@ -53,7 +61,14 @@ To open a file directly:
 uv run main.py path/to/file.pdf
 ```
 
-## Building a Windows executable
+## Releases
+
+Releases are built by GitHub Actions ([`build.yml`](.github/workflows/build.yml)). Every push to `main` runs
+the tests and builds a dev version; pushing a tag like `v1.2.3` publishes a GitHub Release with the
+Windows zip attached. The version shown in the app comes from the tag. See
+[RELEASE_CHECKLIST.md](RELEASE_CHECKLIST.md).
+
+## Building a Windows executable locally
 
 ```bash
 uv run pyinstaller PageWisp.spec --noconfirm --clean
@@ -83,11 +98,17 @@ tests/                pytest + pytest-qt suite
 PageWisp.spec         PyInstaller build configuration
 ```
 
-## Built with
+## Credits
 
-- [PySide6](https://doc.qt.io/qtforpython-6/) (Qt for Python), licensed LGPL-3.0
-- [PyMuPDF](https://pymupdf.readthedocs.io/), licensed AGPL-3.0, for rendering, text and search
-- Icons from [Lucide](https://lucide.dev/), licensed ISC (some derived from Feather, MIT). See [licenses/LUCIDE.txt](licenses/LUCIDE.txt)
+PageWisp stands on the shoulders of these open-source projects:
+
+- [PyMuPDF](https://github.com/pymupdf/pymupdf) and [MuPDF](https://mupdf.com/) by Artifex: the PDF engine (AGPL-3.0)
+- [Qt 6](https://www.qt.io/) and [PySide6](https://pyside.org): the user interface (LGPL-3.0)
+- [Lucide](https://lucide.dev/): the icons (ISC)
+- [Python](https://www.python.org/), [PyInstaller](https://pyinstaller.org), [uv](https://github.com/astral-sh/uv), [pytest](https://pytest.org) and [pytest-qt](https://github.com/pytest-dev/pytest-qt)
+
+The full list with licenses is in [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md), and every release
+includes an SBOM (`PageWisp-<version>-sbom.cdx.json`) listing the exact dependency versions.
 
 ## License
 

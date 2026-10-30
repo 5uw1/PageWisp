@@ -1,0 +1,139 @@
+name: Build
+
+# Push to main / pull request / manual run: run the tests and build a dev-versioned Windows app,
+# uploaded as a workflow artifact.
+# Tag push (v1.2.3, v1.2.3-rc1, ...): stamp the exact version and publish it on a GitHub Release.
+on:
+  push:
+    tags: ["v*"]
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  # ---------------------------------------------------------------- version
+  version:
+    runs-on: ubuntu-latest
+    outputs:
+      app_version: ${{ steps.v.outputs.app_version }}
+      prerelease: ${{ steps.v.outputs.prerelease }}
+    steps:
+      - uses: actions/checkout@v4
+      - id: v
+        shell: bash
+        run: |
+          if [[ "$GITHUB_REF" == refs/tags/* ]]; then
+            VERSION="${GITHUB_REF_NAME#v}"                     # v1.2.3-rc1 -> 1.2.3-rc1
+          else
+            BASE=$(sed -n 's/^version = "\(.*\)"/\1/p' pyproject.toml | head -n 1)
+            VERSION="${BASE}-dev.${GITHUB_RUN_NUMBER}"         # every non-tag build uniquely numbered
+          fi
+          echo "app_version=$VERSION" >> "$GITHUB_OUTPUT"
+          if [[ "$VERSION" == *-* ]]; then echo "prerelease=true" >> "$GITHUB_OUTPUT"; else echo "prerelease=false" >> "$GITHUB_OUTPUT"; fi
+
+  # ---------------------------------------------------------------- code quality + security
+  quality:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: astral-sh/setup-uv@v6
+      - name: Lint (Ruff, rules in pyproject.toml)
+        run: uvx ruff check app main.py tests
+      - name: Security lint (Bandit)
+        run: uvx bandit -r app main.py -q
+      - name: Known vulnerabilities in locked dependencies (pip-audit)
+        run: |
+          uv export --format requirements-txt --no-hashes --no-emit-project -o requirements-all.txt
+          uvx pip-audit -r requirements-all.txt --disable-pip --no-deps
+
+  # ---------------------------------------------------------------- tests
+  test:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: astral-sh/setup-uv@v6
+      - run: uv sync --locked
+      - name: Run tests (headless Qt)
+        run: uv run pytest -v
+        env:
+          QT_QPA_PLATFORM: offscreen
+
+  # ---------------------------------------------------------------- windows
+  windows:
+    needs: [version, quality, test]
+    runs-on: windows-latest
+    env:
+      APP_VERSION: ${{ needs.version.outputs.app_version }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: astral-sh/setup-uv@v6
+      - run: uv sync --locked
+      - name: Stamp version
+        shell: bash
+        run: echo "VERSION = \"$APP_VERSION\"" > app/version.py
+      - name: Build with PyInstaller
+        run: uv run pyinstaller PageWisp.spec --noconfirm --clean
+      # Launch the frozen app headlessly and make sure it is still running after a few seconds,
+      # which catches missing DLLs / modules that only show up in the packaged build.
+      - name: Smoke-test the executable
+        shell: pwsh
+        env:
+          QT_QPA_PLATFORM: offscreen
+        run: |
+          $p = Start-Process -FilePath "dist/PageWisp/PageWisp.exe" -PassThru
+          Start-Sleep -Seconds 8
+          if ($p.HasExited) { Write-Error "PageWisp.exe exited early with code $($p.ExitCode)"; exit 1 }
+          Stop-Process -Id $p.Id
+      - name: Zip the app folder
+        shell: pwsh
+        run: |
+          New-Item -ItemType Directory -Force out | Out-Null
+          Compress-Archive -Path dist/PageWisp -DestinationPath "out/PageWisp-$env:APP_VERSION-windows.zip"
+      # SBOM of the shipped (non-dev) dependencies, exact versions from uv.lock. Licenses and the
+      # components bundled inside them are listed in THIRD_PARTY_NOTICES.md.
+      - name: Generate SBOM (CycloneDX)
+        shell: bash
+        run: uv export --format cyclonedx1.5 --preview-features sbom-export --no-dev -o "out/PageWisp-$APP_VERSION-sbom.cdx.json"
+      - uses: actions/upload-artifact@v4
+        with:
+          name: PageWisp-windows
+          path: out/*
+
+  # ---------------------------------------------------------------- release (tags only)
+  release:
+    needs: [version, windows]
+    if: startsWith(github.ref, 'refs/tags/')
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          pattern: PageWisp-*
+          path: dist
+          merge-multiple: true
+      # Create the release first (idempotent: re-running the job keeps the existing one), then upload
+      # every asset separately with retries – large uploads occasionally get an HTTP 500 from GitHub.
+      - name: Create GitHub Release with auto-generated notes
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          FLAG=""
+          if [[ "${{ needs.version.outputs.prerelease }}" == "true" ]]; then FLAG="--prerelease"; fi
+          if ! gh release view "$GITHUB_REF_NAME" --repo "${{ github.repository }}" >/dev/null 2>&1; then
+            # shellcheck disable=SC2086
+            gh release create "$GITHUB_REF_NAME" \
+              --repo "${{ github.repository }}" \
+              --title "PageWisp $GITHUB_REF_NAME" \
+              --generate-notes \
+              $FLAG
+          fi
+          for f in dist/*; do
+            for attempt in 1 2 3 4 5; do
+              if gh release upload "$GITHUB_REF_NAME" "$f" --repo "${{ github.repository }}" --clobber; then break; fi
+              if [[ "$attempt" == "5" ]]; then echo "::error title=Asset upload failed::$f"; exit 1; fi
+              echo "upload of $f failed (attempt $attempt), retrying in $((attempt * 15))s"
+              sleep $((attempt * 15))
+            done
+          done

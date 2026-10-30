@@ -1,0 +1,48 @@
+[project]
+name = "pagewisp"
+version = "0.1.0"
+description = "A fast, lightweight PDF reader for the desktop"
+readme = "README.md"
+license = "AGPL-3.0-or-later"
+license-files = ["LICENSE"]
+requires-python = ">=3.12"
+dependencies = [
+    "pyside6>=6.11",
+    "pymupdf>=1.28",
+]
+
+[dependency-groups]
+dev = [
+    "pyinstaller>=6.11",
+    "pytest>=9.2.0",
+    "pytest-qt>=4.5.0",
+]
+
+[tool.uv]
+package = false
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+pythonpath = [".", "tests"]
+qt_api = "pyside6"
+
+[tool.ruff]
+line-length = 110
+target-version = "py312"
+
+[tool.ruff.lint]
+# pycodestyle, pyflakes, bugbear, pyupgrade, simplify, pylint, ruff-specific, bandit (security),
+# mccabe complexity
+select = ["E", "F", "W", "B", "UP", "SIM", "PL", "RUF", "S", "C90"]
+ignore = [
+    "PLR2004",  # magic numbers: zoom factors, pixel margins and key codes read fine inline
+    "RUF001",   # ambiguous unicode in strings: intentional (Thai text, "←", "—")
+    "RUF003",   # same, in comments
+]
+
+[tool.ruff.lint.per-file-ignores]
+"tests/*" = ["S101", "PLR0913", "E402"]  # asserts, many fixtures, env setup before imports
+"app/icons.py" = ["E501"]  # one-line SVG path data
+
+[tool.ruff.lint.mccabe]
+max-complexity = 10

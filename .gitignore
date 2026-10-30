@@ -1,0 +1,14 @@
+# Python
+__pycache__/
+*.py[cod]
+.venv/
+.pytest_cache/
+
+# PyInstaller output
+build/
+dist/
+
+# Editors / local tools
+.idea/
+.vscode/
+.claude/settings.local.json
